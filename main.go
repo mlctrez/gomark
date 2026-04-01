@@ -6,9 +6,12 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
-	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
 
 	"github.com/alecthomas/chroma/v2/formatters/html"
 	"github.com/alecthomas/chroma/v2/styles"
@@ -27,16 +30,56 @@ func main() {
 	outputPath := flag.String("o", "", "Output html file")
 	flag.Parse()
 
-	if *inputPath == "" || *outputPath == "" {
-		fmt.Println("Usage: gomark -i <input.md> -o <output.html>")
+	var inFile, outFile string
+
+	switch {
+	case *inputPath != "" && *outputPath != "":
+		// Explicit flags: gomark -i input.md -o output.html
+		inFile = *inputPath
+		outFile = *outputPath
+	case *inputPath == "" && *outputPath == "" && flag.NArg() == 1:
+		// Positional arg only: gomark README.md → temp file + open browser
+		inFile = flag.Arg(0)
+		base := strings.TrimSuffix(filepath.Base(inFile), filepath.Ext(inFile))
+		tmpFile, err := os.CreateTemp("", base+"-*.html")
+		if err != nil {
+			log.Fatalf("failed to create temp file: %v", err)
+		}
+		outFile = tmpFile.Name()
+		tmpFile.Close()
+	default:
+		fmt.Println("Usage: gomark <input.md>")
+		fmt.Println("       gomark -i <input.md> -o <output.html>")
 		os.Exit(1)
 	}
 
-	mdContent, err := ioutil.ReadFile(*inputPath)
+	openBrowser := *inputPath == "" && *outputPath == ""
+
+	mdContent, err := os.ReadFile(inFile)
 	if err != nil {
 		log.Fatalf("failed to read input file: %v", err)
 	}
 
+	htmlBytes, err := renderMarkdown(mdContent)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if err := os.WriteFile(outFile, htmlBytes, 0644); err != nil {
+		log.Fatalf("failed to write output file: %v", err)
+	}
+
+	if openBrowser {
+		fmt.Printf("Opening %s\n", outFile)
+		if err := browserOpen(outFile); err != nil {
+			log.Fatalf("failed to open browser: %v", err)
+		}
+	} else {
+		fmt.Printf("Successfully converted %s to %s\n", inFile, outFile)
+	}
+}
+
+func renderMarkdown(mdContent []byte) ([]byte, error) {
 	gm := goldmark.New(
 		goldmark.WithExtensions(
 			extension.GFM,
@@ -58,24 +101,22 @@ func main() {
 
 	var buf bytes.Buffer
 	if err := gm.Convert(mdContent, &buf); err != nil {
-		log.Fatalf("failed to convert markdown: %v", err)
+		return nil, fmt.Errorf("failed to convert markdown: %w", err)
 	}
 
-	// Get CSS for highlighting
 	style := styles.Get("monokai")
 	if style == nil {
 		style = styles.Fallback
 	}
 	formatter := html.New(html.WithAllClasses(true))
 	var cssBuf bytes.Buffer
-	err = formatter.WriteCSS(&cssBuf, style)
-	if err != nil {
-		log.Fatalf("failed to write CSS: %v", err)
+	if err := formatter.WriteCSS(&cssBuf, style); err != nil {
+		return nil, fmt.Errorf("failed to write CSS: %w", err)
 	}
 
 	tmpl, err := template.New("layout").Parse(layoutHTML)
 	if err != nil {
-		log.Fatalf("failed to parse template: %v", err)
+		return nil, fmt.Errorf("failed to parse template: %w", err)
 	}
 
 	data := struct {
@@ -88,13 +129,21 @@ func main() {
 
 	var finalBuf bytes.Buffer
 	if err := tmpl.Execute(&finalBuf, data); err != nil {
-		log.Fatalf("failed to execute template: %v", err)
+		return nil, fmt.Errorf("failed to execute template: %w", err)
 	}
 
-	err = ioutil.WriteFile(*outputPath, finalBuf.Bytes(), 0644)
-	if err != nil {
-		log.Fatalf("failed to write output file: %v", err)
-	}
+	return finalBuf.Bytes(), nil
+}
 
-	fmt.Printf("Successfully converted %s to %s\n", *inputPath, *outputPath)
+func browserOpen(url string) error {
+	var cmd string
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = "open"
+	case "windows":
+		cmd = "start"
+	default:
+		cmd = "xdg-open"
+	}
+	return exec.Command(cmd, url).Start()
 }

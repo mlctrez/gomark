@@ -24,19 +24,35 @@ The `gomark` binary will be placed in your `$GOPATH/bin` (usually `~/go/bin`).
 
 ## Usage
 
-Run `gomark` with the input and output file paths:
+### Quick Preview
+
+Pass a Markdown file as the only argument to render it to a temporary HTML file and open it in your default browser:
+
+```bash
+gomark README.md
+```
+
+The HTML file is written to the OS temp directory (e.g. `/tmp/README-123456.html`) and opened automatically.
+
+### Explicit Output
+
+Use the `-i` and `-o` flags to specify both input and output paths:
 
 ```bash
 gomark -i <input.md> -o <output.html>
 ```
 
-### Flags
+#### Flags
 
 - `-i`: Path to the input Markdown file.
 - `-o`: Path to the output HTML file.
 
-## Example
+### Examples
 
 ```bash
+# Preview in browser
+gomark README.md
+
+# Convert to a specific file
 gomark -i README.md -o documentation.html
 ```
