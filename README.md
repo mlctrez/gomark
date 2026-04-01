@@ -11,6 +11,7 @@
 - **Syntax Highlighting:** High-quality code block highlighting using Chroma (Monokai style).
 - **GFM Support:** Includes support for tables, task lists, and other GitHub Flavored Markdown extensions.
 - **Wide Layout:** Content width optimized for readability (1200px max-width).
+- **Directory Server:** Serve a directory of Markdown files over HTTP with a dark-themed index page.
 
 ## Installation
 
@@ -47,11 +48,24 @@ gomark -i <input.md> -o <output.html>
 - `-i`: Path to the input Markdown file.
 - `-o`: Path to the output HTML file.
 
+### Directory Server
+
+Pass a directory as the argument to start an HTTP server on port 9090. It serves a dark-themed index page listing all `.md` and `.markdown` files found recursively under that directory. Clicking a link renders the Markdown as HTML on the fly.
+
+```bash
+gomark ./docs
+```
+
+Then open [http://localhost:9090](http://localhost:9090) in your browser.
+
 ### Examples
 
 ```bash
 # Preview in browser
 gomark README.md
+
+# Serve a directory of markdown files
+gomark ./docs
 
 # Convert to a specific file
 gomark -i README.md -o documentation.html
